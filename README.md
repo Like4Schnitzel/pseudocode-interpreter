@@ -6,7 +6,9 @@ Error messages are slightly broken.
 ## Docs for the pseudocode
 * Operators
   * Mathematical operators
-    * +, -, *, /, div, mod, ^, sqrt
+    * +, -, *, /, div, mod, %, ^, sqrt
+    * 'div' is integer division.
+    * 'mod' and '%' are synonymous.
   * Logical operators
     * <, <=, >, >=, ==, !=
     * "nicht, und, oder" as "not, and, or"

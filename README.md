@@ -51,3 +51,47 @@ Needs Python 3.10+ to run due to match case statements.
       sonst falls condition3
           dann ...
     ```
+
+* While loops
+  * Are written as follows:
+    ```
+    solange condition wiederhole
+      ...
+    ```
+    being equivalent to
+    ```
+    while (condition)
+    {
+      ...
+    }
+    ```
+
+* Do while loops
+  * Are written as follows:
+    ```
+    wiederhole
+      ...
+    solange condition
+    ```
+    being equivalent to
+    ```
+    do
+    {
+      ...
+    } while (condition)
+    ```
+
+* For loops
+  * Are written as follows:
+    ```
+    für i von x bis y mit z wiederhole
+      ...
+    ```
+    being equivalent to
+    ```
+    for (i = x; i <= y; i += z)
+    {
+      ...
+    }
+    ```
+  * If `mit z` is ommitted the value defaults to 1

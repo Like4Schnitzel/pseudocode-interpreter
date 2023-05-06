@@ -55,6 +55,36 @@ Error messages are slightly broken.
           dann ...
     ```
 
+* Switch case statements
+  * Are written as follows:
+    ```
+    falls value
+      x: ...
+      y: ...
+        ...
+      z: ...
+      sonst: ...
+    ```
+    being equivalent to
+    ```
+    switch (value)
+    {
+      case x: ...
+        break;
+      case y: ...
+        ...
+        break;
+      case z: ...
+        break;
+      default: ...
+        break;
+    }
+    ```
+  * Break statements don't exist.
+  * `value` is stored into an internal variable and cannot be changed.
+  * `x`/`y`/`z` get evaluated at time of comparison.
+  * Any expression or variable is valid as `x`/`y`/`z`.
+
 * While loops
   * Are written as follows:
     ```

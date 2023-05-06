@@ -1,7 +1,7 @@
 # pseudocode-interpreter
 My teacher really likes pseudocode but I don't, so here's an interpreter to at least make it runnable.
 Needs Python 3.10+ to run due to match case statements.
-Error messages are slightly broken.
+Error messages might be slightly broken.
 
 ## Docs for the pseudocode
 * Operators

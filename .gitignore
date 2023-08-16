@@ -1,3 +1,5 @@
 *.txt
 *.pdf
 *.exe
+out.py
+.vscode

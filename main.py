@@ -1,513 +1,550 @@
+"""Interprets pseudocode."""
 from re import findall
 from dataclasses import dataclass
 
 @dataclass
 class Line:
-    text: str;
-    index: int;
-    indent: int;
+    """Holds information about a line of pseudocode."""
+    text: str
+    index: int
+    indent: int
 
 @dataclass
 class BlockInitiator:
-    initiator: str = "";
-    index: int = 0;
-    condition: any = "";
-    enteredCase: bool = False;
-    var: str = "";
-    stop: any = "";
-    step: any = "";
+    """Holds information about a block initiator"""
+    initiator: str = ""
+    index: int = 0
+    condition: any = ""
+    entered_case: bool = False
+    var: str = ""
+    stop: any = ""
+    step: any = ""
 
-def isInQuotes(s, index):
-    return s[:index].count('"') % 2 == 1;
+def is_in_quotes(string, index):
+    """Checks if a char in a string is surrounded by quotes."""
+    return string[:index].count('"') % 2 == 1
 
-def findLastNonQuotedString(s1: str, s2):
-    index = s1.rfind(s2);
-    while (index != -1):
-        if (not isInQuotes(s1, index)):
-            return index;
-        index = s1.rfind(s2, 0, index);
-    return index;
+def find_last_non_quoted_string(string, to_find):
+    """Finds last occurrence of a substring in a string that isn't surrounded by quotes.
+       Returns -1 if unsuccesful."""
+    index = string.rfind(to_find)
+    while index != -1:
+        if not is_in_quotes(string, index):
+            return index
+        index = string.rfind(to_find, 0, index)
+    return index
 
-def findClosingPars(expr : str, openPar):
-    levelsDeep = 1;
-    i = openPar+1;
-    while levelsDeep > 0:
-        if (expr[i] == '('):
-            levelsDeep += 1;
-        elif (expr[i] == ')'):
-            levelsDeep -= 1;
+def find_closing_pars(expr : str, open_par):
+    """Returns end index of a bracket pair."""
+    levels_deep = 1
+    i = open_par+1
+    while levels_deep > 0:
+        if expr[i] == '(':
+            levels_deep += 1
+        elif expr[i] == ')':
+            levels_deep -= 1
 
-        i += 1;
-        if (i >= len(expr) and levelsDeep > 0):
-            raise Exception("Syntax Error, expected ')'");
+        i += 1
+        if (i >= len(expr) and levels_deep > 0):
+            raise SyntaxError("expected ')'")
 
-    return i-1;
+    return i-1
 
-def toBool(s):
-    if isinstance(s, bool):
-        return s;
+def to_bool(string):
+    """Attempts to typecast a string to a boolean."""
+    if isinstance(string, bool):
+        return string
 
-    if (s == "true" or s == "True"):
-        return True;
-    if (s == "false" or s == "False"):
-        return False;
+    if (string == "true" or string == "True"):
+        return True
+    if (string == "false" or string == "False"):
+        return False
 
-    raise Exception("expected a boolean value.");
+    raise SyntaxError("expected a boolean value.")
 
-def floatOrBoolOrString(val : str):
+def float_or_bool_or_string(val : str):
+    """Attempts to automatically typecast a string."""
     try:
         try:
-            return toBool(val);
-        except Exception:
-            return roundedFloat(val);
-    except:
-        return val;
+            return to_bool(val)
+        except SyntaxError:
+            return rounded_float(val)
+    except SyntaxError:
+        return val
 
-def varOrNot(val : str, variables : dict):
-    if ((val[0] == "\"" and val[-1] == "\"") or (val[0] == "'" and val[-1] == "'" and len(val) == 3)):
-        return val[1:-1];
+def var_or_not(val : str, variables : dict):
+    """Checks if a string is a variable name. If not, returns a typecasted value of the string."""
+    if (val[0] == "\"" and val[-1] == "\"") or (val[0] == "'" and val[-1] == "'" and len(val) == 3):
+        return val[1:-1]
 
     try:
         try:
-            return toBool(val);
-        except Exception:
-            return roundedFloat(val);
-    except Exception:
-        isValidVarName(val);
-        if (val in variables.keys()):
-            return variables[val];
+            return to_bool(val)
+        except SyntaxError:
+            return rounded_float(val)
+    except Exception as exc:
+        is_valid_var_name(val)
+        if val in variables.keys():
+            return variables[val]
 
-        raise Exception("value not assigned.");
+        raise SyntaxError("value not assigned.") from exc
 
-def roundedFloat(x):
-    return round(float(x), 8);
+def rounded_float(num):
+    """Typecasts to a float, rounded to 8 decimal places."""
+    return round(float(num), 8)
 
-def evalExpression(expr, variables : dict):
-    if (not isinstance(expr, str)):
-        return expr;
+def eval_expression(expr, variables : dict):
+    """Evaluates expressions recursively."""
+    if not isinstance(expr, str):
+        return expr
 
-    expr = expr.strip(' ');
+    expr = expr.strip(' ')
 
     if expr.startswith('nicht '):
-        return not toBool(evalExpression(expr[6:], variables));
+        return not to_bool(eval_expression(expr[6:], variables))
 
-    openPar = expr.find('(');
-    while (openPar != -1):
-        closingPar = findClosingPars(expr, openPar);
-        expr = expr[:openPar] + str(evalExpression(expr[openPar+1:closingPar], variables)) + expr[closingPar+1:];
-        openPar = expr.find('(');
+    open_par = expr.find('(')
+    while open_par != -1:
+        closing_par = find_closing_pars(expr, open_par)
+        expr = expr[:open_par] \
+               + str(eval_expression(expr[open_par+1:closing_par], variables)) \
+               + expr[closing_par+1:]
 
-    connectorGroups = [[' oder ', ' und '], ['==', '!=', '<', '>', '<=', '>='], ['+', '-'], [' div ', ' mod ', '%', '/', '*'], ['^']];
+        open_par = expr.find('(')
 
-    for group in connectorGroups:
-        lastConnector = -1;
+    connector_groups = [[' oder ', ' und '], ['==', '!=', '<', '>', '<=', '>='],
+                       ['+', '-'], [' div ', ' mod ', '%', '/', '*'], ['^']]
+
+    for group in connector_groups:
+        last_connector = -1
         for connector in group:
-            lastFound = findLastNonQuotedString(expr, connector);
-            if (lastFound >= lastConnector):
-                lastConnector = lastFound;
-                lastConnectorString = connector;
+            last_found = find_last_non_quoted_string(expr, connector)
+            if last_found >= last_connector:
+                last_connector = last_found
+                last_connector_string = connector
 
-        if (lastConnector >= 0):
-            splits = [expr[:lastConnector], expr[lastConnector+len(lastConnectorString):]];
+        if last_connector >= 0:
+            splits = [expr[:last_connector], expr[last_connector+len(last_connector_string):]]
 
-            match (lastConnectorString):
+            match (last_connector_string):
                 case ' und ':
-                    return evalExpression(splits[0], variables) and evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           and eval_expression(splits[1], variables)
 
                 case ' oder ':
-                    return evalExpression(splits[0], variables) or evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           or eval_expression(splits[1], variables)
 
                 case '==':
-                    return evalExpression(splits[0], variables) == evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           == eval_expression(splits[1], variables)
 
                 case '!=':
-                    return evalExpression(splits[0], variables) != evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           != eval_expression(splits[1], variables)
 
                 case '<':
-                    return evalExpression(splits[0], variables) < evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           < eval_expression(splits[1], variables)
 
                 case '>':
-                    return evalExpression(splits[0], variables) > evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           > eval_expression(splits[1], variables)
 
                 case '<=':
-                    return evalExpression(splits[0], variables) <= evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           <= eval_expression(splits[1], variables)
 
                 case '>=':
-                    return evalExpression(splits[0], variables) >= evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           >= eval_expression(splits[1], variables)
 
                 case '^':
-                    return evalExpression(splits[0], variables) ** evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           ** eval_expression(splits[1], variables)
 
                 case ' div ':
-                    return int(evalExpression(splits[0], variables)) / int(evalExpression(splits[1], variables));
+                    return int(eval_expression(splits[0], variables)) \
+                           / int(eval_expression(splits[1], variables))
 
                 case ' mod ' | '%':
-                    return evalExpression(splits[0], variables) % evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           % eval_expression(splits[1], variables)
 
                 case '/':
-                    return evalExpression(splits[0], variables) / evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           / eval_expression(splits[1], variables)
 
                 case '*':
-                    return evalExpression(splits[0], variables) * evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           * eval_expression(splits[1], variables)
 
                 case '+':
-                    return evalExpression(splits[0], variables) + evalExpression(splits[1], variables);
+                    return eval_expression(splits[0], variables) \
+                           + eval_expression(splits[1], variables)
 
                 case '-':
-                    if (splits[0] == ""):
-                        return -evalExpression(splits[1], variables);
+                    if splits[0] == "":
+                        return -eval_expression(splits[1], variables)
                     #else
-                    return evalExpression(splits[0], variables) - evalExpression(splits[1], variables);
-    
-    if (expr.startswith('sqrt ')):
-        return varOrNot(expr[5:], variables) ** 0.5;
+                    return eval_expression(splits[0], variables) \
+                           - eval_expression(splits[1], variables)
 
-    return varOrNot(expr, variables);
+    if expr.startswith('sqrt '):
+        return var_or_not(expr[5:], variables) ** 0.5
 
-def getAllTokens(line : str):
+    return var_or_not(expr, variables)
+
+def get_all_tokens(line : str):
+    """Indexes all 'tokens' of a line."""
     #remove comments
-    lineCommentPos = line.find('//');
-    if (lineCommentPos != -1):
-        line = line[:lineCommentPos];
-        lineCommentPos = line.find('//');
-    
-    blockCommentStartPos = line.find('/*');
-    while (blockCommentStartPos != -1):
-        line = line[:blockCommentStartPos] + line[line.find('*/')+2:];
-        blockCommentStartPos = line.find('/*');
+    line_comment_pos = line.find('//')
+    if line_comment_pos != -1:
+        line = line[:line_comment_pos]
+        line_comment_pos = line.find('//')
 
-    tokens = [];
-    inQuotations = False;
-    splitLine = [];
-    inQuotes = False;
-    lastAppendIndex = 0;
+    block_comment_start_pos = line.find('/*')
+    while block_comment_start_pos != -1:
+        line = line[:block_comment_start_pos] + line[line.find('*/')+2:]
+        block_comment_start_pos = line.find('/*')
+
+    tokens = []
+    in_quotations = False
+    split_line = []
+    last_append_index = 0
     for i in range(len(line)):
         if line[i] == "\"":
-            inQuotations = not inQuotations;
-        
-        if ((not inQuotations and line[i] == " ") or i == len(line)-1):
-            toAppend = line[lastAppendIndex:i+1].strip(" ");
-            if (toAppend != ""):
-                splitLine.append(toAppend);
-            lastAppendIndex = i+1;
-    for token in splitLine:
-        #turn "foo<=bar>=baz" into ["foo", "<", "=", "bar", ">", "=", "baz"];
-        i = 0;
-        inQuotations = False;
+            in_quotations = not in_quotations
+
+        if (not in_quotations and line[i] == " ") or i == len(line)-1:
+            to_append = line[last_append_index:i+1].strip(" ")
+            if to_append != "":
+                split_line.append(to_append)
+            last_append_index = i+1
+    for token in split_line:
+        #turn "foo<=bar>=baz" into ["foo", "<", "=", "bar", ">", "=", "baz"]
+        i = 0
+        in_quotations = False
         while i < len(token):
-            if (token[i] == "\""):
-                inQuotations = not inQuotations;
+            if token[i] == "\"":
+                in_quotations = not in_quotations
 
-            if (not inQuotations):
+            if not in_quotations:
                 if (token[i] in ['<', '>', '=', '!']):
-                    if (token[:i] != ''):
-                        tokens.append(token[:i]);
-                    tokens.append(token[i]);
-                    token = token[i+1:];
-                    i = -1;
-            i += 1;
-        if (token != ''):
-            tokens.append(token);
-        #for tk in [val for pair in zip(token.split('='), ['='] * (token.count('=')+1)) for val in pair][:-1]:
-        #    if (tk != ""):
-        #        tokens.append(tk);
+                    if token[:i] != '':
+                        tokens.append(token[:i])
+                    tokens.append(token[i])
+                    token = token[i+1:]
+                    i = -1
+            i += 1
+        if token != '':
+            tokens.append(token)
 
-    return tokens;
+    return tokens
 
-def isValidVarName(s : str):
-    i = 0;
-    for c in s.lower():
+def is_valid_var_name(string):
+    """Checks if a variable name breaks conventions."""
+    for (i, c) in enumerate(string.lower()):
         if (((c < 'a' or c > 'z') and (c < '0' or c > '9')) or (i == 0 and c >= '0' and c <= '9')):
-            raise Exception(f"'{s}' is not a valid variable name.");
-        i += 1;
+            raise SyntaxError(f"'{string}' is not a valid variable name.")
 
-def getIndentStep(lines):
+def get_indent_step(lines):
+    """Gets amount of spaces per indent in the input file."""
     for line in lines:
-        if (line.indent > 0):
-            return line.indent;
+        if line.indent > 0:
+            return line.indent
 
-    return 0;
+    return 0
 
-def betterJoin(elems : list, c : chr):
-    out = "";
-    for i in range(len(elems)):
-        elem = elems[i];
-        out += elem;
+def better_join(elems : list, c : chr):
+    """To be used instead of str.join()"""
+    out = ""
+    for (i, elem) in enumerate(elems):
+        out += elem
         if (i >= len(elems)-1 or (elem + elems[i+1] not in ['<=', '>=', '!=', '=='])):
-            out += c;
+            out += c
 
-    return out;
+    return out
 
-def indentOfLastKey(blockInitiators : dict, key_str : str):
-    lastIndent = -1;
-    for key in blockInitiators.keys():
-        if (blockInitiators[key].initiator == key_str):
-            lastIndent = key;
+def indent_of_last_key(block_initiators : dict, key_str : str):
+    """Returns indent of most recent block initiator key."""
+    last_indent = -1
+    for key in block_initiators.keys():
+        if block_initiators[key].initiator == key_str:
+            last_indent = key
 
-    return lastIndent;
+    return last_indent
 
-def mainThread(lines):
-    variables = {};
-    blockInitiators = {};
-    output = "";
-    indentStep = getIndentStep(lines);
-    maxIndent = 0;
-    lineIndex = 0;
+def main_thread(lines):
+    """Function to handle interpretation of input file."""
+    variables = {}
+    block_initiators = {}
+    output = ""
+    indent_step = get_indent_step(lines)
+    max_indent = 0
+    line_index = 0
 
     try:
         while True:
-            while lineIndex < len(lines):
-                line = lines[lineIndex];
-                tokens = getAllTokens(line.text);
-                if (len(tokens) == 0 or line.indent > maxIndent):
-                    lineIndex += 1;
-                    continue;
+            while line_index < len(lines):
+                line = lines[line_index]
+                tokens = get_all_tokens(line.text)
+                if (len(tokens) == 0 or line.indent > max_indent):
+                    line_index += 1
+                    continue
 
-                if (line.indent < maxIndent):
-                    beginIndent = max(indentOfLastKey(blockInitiators, "solange"), indentOfLastKey(blockInitiators, "für"));
+                if line.indent < max_indent:
+                    begin_indent = max(indent_of_last_key(block_initiators, "solange")
+                                  , indent_of_last_key(block_initiators, "für"))
 
-                    if ((tokens[0] != "solange" and tokens != ["wiederhole"]) or beginIndent >= line.indent):
-                        if (beginIndent > -1):
-                            if (line.indent <= beginIndent and lineIndex > blockInitiators[beginIndent].index):
-                                lineIndex = blockInitiators[beginIndent].index;
-                                continue;
+                    if (tokens[0] != "solange" and tokens != ["wiederhole"]) \
+                       or begin_indent >= line.indent:
 
-                        maxIndent = line.indent;
-                        
-                        for key in list(blockInitiators.keys()):
-                            if (key > maxIndent):
-                                blockInitiators.pop(key);
+                        if begin_indent > -1:
+                            if (line.indent <= begin_indent \
+                                and line_index > block_initiators[begin_indent].index):
+
+                                line_index = block_initiators[begin_indent].index
+                                continue
+
+                        max_indent = line.indent
+
+                        for key in list(block_initiators.keys()):
+                            if key > max_indent:
+                                block_initiators.pop(key)
 
                 #get index of token that ends with a colon, if there is one
-                colonIndex = -1;
-                i = 0;
-                while (i < len(tokens)):
-                    if (tokens[i].endswith(':')):
-                        colonIndex = i;
+                colon_index = -1
+                i = 0
+                while i < len(tokens):
+                    if tokens[i].endswith(':'):
+                        colon_index = i
                     i += 1
 
-                index = 1;
-                afterText = False;
+                index = 1
+                after_text = False
                 match (tokens[0]):
                     case "lies":
-                        tokens[1:] = ''.join(tokens[1:]).split(',');
+                        tokens[1:] = ''.join(tokens[1:]).split(',')
 
-                        while (index < len(tokens)):
-                            isValidVarName(tokens[index]);
-                            variables[tokens[index]] = floatOrBoolOrString((input("Enter a value for " + tokens[index] + ": ")));
+                        while index < len(tokens):
+                            is_valid_var_name(tokens[index])
+                            variables[tokens[index]] = float_or_bool_or_string((input(
+                                "Enter a value for " + tokens[index] + ": ")))
 
-                            tempOut = variables[tokens[index]];
-                            if (type(tempOut) == float):
-                                    if ((int(tempOut) == tempOut)):
-                                        tempOut = int(tempOut);
-                                    else:
-                                        tempOut = round(tempOut, 8);
+                            temp_out = variables[tokens[index]]
+                            if type(temp_out) == float:
+                                if (int(temp_out) == temp_out):
+                                    temp_out = int(temp_out)
+                                else:
+                                    temp_out = round(temp_out, 8)
 
-                            output += f"Enter a value for {tokens[index]}: {tempOut}\n";
-                            index += 1;
+                            output += f"Enter a value for {tokens[index]}: {temp_out}\n"
+                            index += 1
 
                     case "schreibe":
-                        tokens[1:] = findall(r'(?:[^,"]|"[^"]*")+', betterJoin(tokens[1:], " "));
+                        tokens[1:] = findall(r'(?:[^,"]|"[^"]*")+', better_join(tokens[1:], " "))
 
-                        while (index < len(tokens)):
-                            tokens[index] = tokens[index].strip();
+                        while index < len(tokens):
+                            tokens[index] = tokens[index].strip()
 
                             if (tokens[index].startswith("\"") and tokens[index].endswith("\"")):
-                                tempOut = tokens[index][1:-1].replace("\\n", "\n")
-                                output += tempOut;
-                                print(tempOut, end="");
-                                afterText = True;
+                                temp_out = tokens[index][1:-1].replace("\\n", "\n")
+                                output += temp_out
+                                print(temp_out, end="")
+                                after_text = True
 
                             else:
-                                tempOut = evalExpression(tokens[index], variables);
-                                if (type(tempOut) == float):
-                                    if ((int(tempOut) == tempOut)):
-                                        tempOut = int(tempOut);
+                                temp_out = eval_expression(tokens[index], variables)
+                                if isinstance(temp_out, float):
+                                    if int(temp_out) == temp_out:
+                                        temp_out = int(temp_out)
                                     else:
-                                        tempOut = round(tempOut, 8);
-                                if (afterText):
-                                    output += str(tempOut);
-                                    print(str(tempOut), end="");
-                                    afterText = False;
+                                        temp_out = round(temp_out, 8)
+                                if after_text:
+                                    output += str(temp_out)
+                                    print(str(temp_out), end="")
+                                    after_text = False
                                 else:
-                                    tempOut = f"The value of '{tokens[index]}' is \"{tempOut}\"\n";
-                                    output += tempOut;
-                                    print(tempOut, end="");
+                                    temp_out = f"The value of '{tokens[index]}' is \"{temp_out}\"\n"
+                                    output += temp_out
+                                    print(temp_out, end="")
 
-                            index += 1;
+                            index += 1
 
                     case "falls":
-                        condition = evalExpression(betterJoin(tokens[1:], ' '), variables);
-                        blockInitiators[line.indent] = BlockInitiator(initiator="falls", condition=condition, enteredCase=False);
-                        maxIndent += indentStep;
+                        condition = eval_expression(better_join(tokens[1:], ' '), variables)
+                        block_initiators[line.indent] = BlockInitiator(initiator="falls", condition=condition, entered_case=False)
+                        max_indent += indent_step
 
                     case "dann":
-                        if ((not (line.indent - indentStep) in blockInitiators) or blockInitiators[line.indent - indentStep].initiator != "falls"):
-                            raise Exception("expected 'falls' before 'dann'.");
+                        if ((not line.indent - indent_step in block_initiators) or \
+                            block_initiators[line.indent - indent_step].initiator != "falls"):
+                            raise Exception("expected 'falls' before 'dann'.")
 
-                        if (len(tokens) > 1):
-                            lines.insert(lineIndex+1, Line(betterJoin(tokens[1:], ' ')), line.index, line.indent + indentStep);
-                            lines[lineIndex].text = (' ' * line.indent) + tokens[0];
+                        if len(tokens) > 1:
+                            lines.insert(line_index+1, Line(better_join(tokens[1:], ' '), line.index, line.indent + indent_step))
+                            lines[line_index].text = (' ' * line.indent) + tokens[0]
 
-                        if (blockInitiators[line.indent - indentStep].condition):
-                            maxIndent += indentStep;
+                        if (block_initiators[line.indent - indent_step].condition):
+                            max_indent += indent_step
                         else:
                             #find next 'sonst' at the correct indent, otherwise move to end
-                            i = lineIndex;
+                            i = line_index
                             while ((i < len(lines)) and (len(lines[i].text) - len(lines[i].text.lstrip(' ')) >= line.indent)):
                                 if (lines[i].text.lstrip(" ").startswith("sonst")):
-                                    break;
+                                    break
 
-                                i += 1;
-                            lineIndex = i-1;
+                                i += 1
+                            line_index = i-1
 
                     case "sonst":
-                        if ((not (line.indent - indentStep) in blockInitiators) or blockInitiators[line.indent - indentStep].initiator != "falls"):
-                            raise Exception("expected 'falls' before 'sonst'.");
+                        if ((not (line.indent - indent_step) in block_initiators) or block_initiators[line.indent - indent_step].initiator != "falls"):
+                            raise Exception("expected 'falls' before 'sonst'.")
 
                         if (len(tokens) > 1):
-                            lines.insert(lineIndex+1, Line(betterJoin(tokens[1:], ' '), line.index, line.indent + indentStep));
-                            line.text = (' ' * line.indent) + tokens[0];
+                            lines.insert(line_index+1, Line(better_join(tokens[1:], ' '), line.index, line.indent + indent_step))
+                            line.text = (' ' * line.indent) + tokens[0]
 
-                        if (not blockInitiators[line.indent - indentStep].condition):
-                            maxIndent += indentStep;
+                        if (not block_initiators[line.indent - indent_step].condition):
+                            max_indent += indent_step
 
-                    case other if (colonIndex != -1):    #case
-                        if ((not (line.indent - indentStep) in blockInitiators) or blockInitiators[line.indent - indentStep].initiator != "falls"):
-                            raise Exception("expected 'falls' before case.");
+                    case other if (colon_index != -1):    #case
+                        if ((not (line.indent - indent_step) in block_initiators) or block_initiators[line.indent - indent_step].initiator != "falls"):
+                            raise Exception("expected 'falls' before case.")
 
-                        initiator = blockInitiators[line.indent - indentStep];
+                        initiator = block_initiators[line.indent - indent_step]
 
                         if (len(tokens) > 1):
-                            lines.insert(lineIndex+1, Line(betterJoin(tokens[colonIndex+1:], ' '), line.index, line.indent + indentStep));
-                            line.text = (' ' * line.indent) + betterJoin(tokens[:colonIndex+1], ' ');
-                            tokens = getAllTokens(line.text);
+                            lines.insert(line_index+1, Line(better_join(tokens[colon_index+1:], ' '), line.index, line.indent + indent_step))
+                            line.text = (' ' * line.indent) + better_join(tokens[:colon_index+1], ' ')
+                            tokens = get_all_tokens(line.text)
 
-                        expression = [tokens[i] for i in range(len(tokens)-1)];
-                        expression.append(tokens[-1][:-1]);
+                        expression = [tokens[i] for i in range(len(tokens)-1)]
+                        expression.append(tokens[-1][:-1])
 
-                        sonst = False;
+                        sonst = False
                         if (tokens[0] == "sonst:"):
-                            if (initiator.enteredCase):
-                                lineIndex += 1;
-                                continue;
+                            if (initiator.entered_case):
+                                line_index += 1
+                                continue
                             
-                            sonst = True;
+                            sonst = True
 
-                        if (sonst or initiator.condition == evalExpression(betterJoin(expression, ' '), variables)):
-                            maxIndent += indentStep;
-                            initiator.enteredCase = True;
+                        if (sonst or initiator.condition == eval_expression(better_join(expression, ' '), variables)):
+                            max_indent += indent_step
+                            initiator.entered_case = True
 
                     case "solange":
                         if (tokens[-1] == "wiederhole"):
-                            expression = betterJoin(tokens[1:-1], ' ');
+                            expression = better_join(tokens[1:-1], ' ')
                         else:
-                            expression = betterJoin(tokens[1:], ' ');
-                        condition = evalExpression(expression, variables);
+                            expression = better_join(tokens[1:], ' ')
+                        condition = eval_expression(expression, variables)
 
                         if (tokens[-1] != "wiederhole"):
-                            if (blockInitiators[line.indent].initiator != "wiederhole"):
-                                raise Exception("expected 'wiederhole' at the end of the line.");
+                            if (block_initiators[line.indent].initiator != "wiederhole"):
+                                raise Exception("expected 'wiederhole' at the end of the line.")
                             elif (condition):
-                                lineIndex = blockInitiators[line.indent].index;
-                                maxIndent -= indentStep;
-                                continue;
+                                line_index = block_initiators[line.indent].index
+                                max_indent -= indent_step
+                                continue
 
                         if (condition):
-                            blockInitiators[line.indent] = BlockInitiator(initiator="solange", condition=condition, index=lineIndex);
-                            maxIndent += indentStep;
-                        elif (line.indent in blockInitiators):
-                            blockInitiators.pop(line.indent);
+                            block_initiators[line.indent] = BlockInitiator(initiator="solange", condition=condition, index=line_index)
+                            max_indent += indent_step
+                        elif (line.indent in block_initiators):
+                            block_initiators.pop(line.indent)
 
                     case "wiederhole":
-                        maxIndent += indentStep;
-                        blockInitiators[line.indent] = BlockInitiator(initiator="wiederhole", index=lineIndex);
+                        max_indent += indent_step
+                        block_initiators[line.indent] = BlockInitiator(initiator="wiederhole", index=line_index)
 
                     case "für":
                         #only do this the first time
-                        if (not line.indent in blockInitiators):
+                        if (not line.indent in block_initiators):
                             if (tokens[-1] != "wiederhole"):
-                                raise Exception("expected 'wiederhole' at the end of the line.");
+                                raise Exception("expected 'wiederhole' at the end of the line.")
                             
                             if (len(tokens) < 3):
-                                raise Exception("expected variable after 'für'.");
-                            var = tokens[1];
+                                raise Exception("expected variable after 'für'.")
+                            var = tokens[1]
                             if (len(tokens) < 4 or tokens[2] != 'von'):
-                                raise Exception("expected 'von' after variable.");
+                                raise Exception("expected 'von' after variable.")
 
                             if (not "bis" in tokens):
-                                raise Exception("expected 'bis' after value.");
+                                raise Exception("expected 'bis' after value.")
                             
-                            bis_index = tokens.index('bis');
-                            start = tokens[3:bis_index];
+                            bis_index = tokens.index('bis')
+                            start = tokens[3:bis_index]
                             if (len(start) < 1):
-                                raise Exception("expected a start value.");
-                            variables[var] = evalExpression(betterJoin(start, ' '), variables);
+                                raise Exception("expected a start value.")
+                            variables[var] = eval_expression(better_join(start, ' '), variables)
 
                             if ("mit" in tokens):
-                                mit_index = tokens.index("mit");
+                                mit_index = tokens.index("mit")
                             else:
-                                mit_index = -1;
+                                mit_index = -1
 
-                            stop = tokens[bis_index+1:mit_index];
+                            stop = tokens[bis_index+1:mit_index]
                             if (len(stop) < 1):
-                                raise Exception("expected a stop value.");
+                                raise Exception("expected a stop value.")
 
                             if (mit_index != -1):
-                                step = tokens[mit_index+1:-1];
+                                step = tokens[mit_index+1:-1]
                             else:
-                                step = ["1"];
+                                step = ["1"]
 
-                            blockInitiators[line.indent] = BlockInitiator(initiator="für", var=var, stop=stop, step=step, index=lineIndex);
+                            block_initiators[line.indent] = BlockInitiator(initiator="für", var=var, stop=stop, step=step, index=line_index)
                         #on repeats
                         else:
-                            variables[blockInitiators[line.indent].var] += evalExpression(betterJoin(blockInitiators[line.indent].step, ' '), variables);
+                            variables[block_initiators[line.indent].var] += eval_expression(better_join(block_initiators[line.indent].step, ' '), variables)
 
-                        if (variables[blockInitiators[line.indent].var] <= evalExpression(betterJoin(blockInitiators[line.indent].stop, ' '), variables)):
-                            maxIndent = line.indent + indentStep;
+                        if (variables[block_initiators[line.indent].var] <= eval_expression(better_join(block_initiators[line.indent].stop, ' '), variables)):
+                            max_indent = line.indent + indent_step
                         else:
-                            blockInitiators.pop(line.indent);
+                            block_initiators.pop(line.indent)
 
                     case other if (tokens[1].strip() == '='):
-                        isValidVarName(tokens[0]);
-                        variables[tokens[0]] = evalExpression(betterJoin(tokens[2:], ' '), variables);
+                        is_valid_var_name(tokens[0])
+                        variables[tokens[0]] = eval_expression(better_join(tokens[2:], ' '), variables)
 
-                lineIndex += 1;
+                line_index += 1
 
-            if (sum([l.initiator for l in blockInitiators.values()].count(s) for s in ("solange", "für")) > 0):
-                beginIndent = max(indentOfLastKey(blockInitiators, "solange"), indentOfLastKey(blockInitiators, "für"));
-                lineIndex = blockInitiators[beginIndent].index;
-                continue;
+            if (sum([l.initiator for l in block_initiators.values()].count(s) for s in ("solange", "für")) > 0):
+                begin_indent = max(indent_of_last_key(block_initiators, "solange"), indent_of_last_key(block_initiators, "für"))
+                line_index = block_initiators[begin_indent].index
+                continue
             #else
-            break;
+            break
 
     except Exception as e:
-        tempOut = f"Line {line.index}: {e}";
-        print(tempOut);
-        output += tempOut;
-        return output;
+        temp_out = f"Line {line.index}: {e}"
+        print(temp_out)
+        output += temp_out
+        return output
 
-    return output;
+    return output
 
 def main():
-    inFile = open("in.txt", 'r');
-    outFile = open("out.txt", 'w');
+    inFile = open("in.txt", 'r')
+    outFile = open("out.txt", 'w')
 
-    allLines = [];
-    i = 1;
+    allLines = []
+    i = 1
     for line in inFile:
-        line = line.rstrip('\n').rstrip(' ');
-        indent = len(line) - len(line.lstrip(' '));
-        line = line[indent:];
-        if (line.endswith(';')):
-            line = line[:-1];
+        line = line.rstrip('\n').rstrip(' ')
+        indent = len(line) - len(line.lstrip(' '))
+        line = line[indent:]
+        if (line.endswith('')):
+            line = line[:-1]
         if (line != ""):
-            allLines.append(Line(line, i, indent));
-        i += 1;
-    outputText = mainThread(allLines);
+            allLines.append(Line(line, i, indent))
+        i += 1
+    outputText = main_thread(allLines)
 
-    outFile.write(outputText);
-    inFile.close();
-    outFile.close();
+    outFile.write(outputText)
+    inFile.close()
+    outFile.close()
 
-main();
+main()

@@ -2,6 +2,7 @@
 My teacher really likes pseudocode but I don't, so here's an interpreter to at least make it runnable.
 Needs Python 3.10+ to run due to match case statements.
 Error messages might be slightly broken.
+Translator to translate the pseudocode to Python code is currently unfinished.
 
 ## Docs for the pseudocode
 * Operators

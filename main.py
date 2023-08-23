@@ -576,7 +576,7 @@ def main():
             line = line.rstrip('\n').rstrip(' ')
             indent = len(line) - len(line.lstrip(' '))
             line = line[indent:]
-            if line.endswith(''):
+            if line.endswith(';'):
                 line = line[:-1]
             if line != "":
                 all_lines.append(Line(line, i, indent))

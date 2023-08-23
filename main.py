@@ -212,11 +212,11 @@ def get_all_tokens(line : str):
     in_quotations = False
     split_line = []
     last_append_index = 0
-    for i in range(len(line)):
-        if line[i] == "\"":
+    for (i, char) in enumerate(line):
+        if char == "\"":
             in_quotations = not in_quotations
 
-        if (not in_quotations and line[i] == " ") or i == len(line)-1:
+        if (not in_quotations and char == " ") or i == len(line)-1:
             to_append = line[last_append_index:i+1].strip(" ")
             if to_append != "":
                 split_line.append(to_append)
@@ -244,8 +244,9 @@ def get_all_tokens(line : str):
 
 def is_valid_var_name(string):
     """Checks if a variable name breaks conventions."""
-    for (i, c) in enumerate(string.lower()):
-        if (((c < 'a' or c > 'z') and (c < '0' or c > '9')) or (i == 0 and c >= '0' and c <= '9')):
+    for (i, char) in enumerate(string.lower()):
+        if (((char < 'a' or char > 'z') and (char < '0' or char > '9'))\
+            or (i == 0 and char >= '0' and char <= '9')):
             raise SyntaxError(f"'{string}' is not a valid variable name.")
 
 def get_indent_step(lines):
@@ -256,13 +257,13 @@ def get_indent_step(lines):
 
     return 0
 
-def better_join(elems : list, c : chr):
+def better_join(elems : list, char : chr):
     """To be used instead of str.join()"""
     out = ""
     for (i, elem) in enumerate(elems):
         out += elem
         if (i >= len(elems)-1 or (elem + elems[i+1] not in ['<=', '>=', '!=', '=='])):
-            out += c
+            out += char
 
     return out
 
@@ -333,8 +334,8 @@ def main_thread(lines):
                                 "Enter a value for " + tokens[index] + ": ")))
 
                             temp_out = variables[tokens[index]]
-                            if type(temp_out) == float:
-                                if (int(temp_out) == temp_out):
+                            if isinstance(temp_out, float):
+                                if int(temp_out) == temp_out:
                                     temp_out = int(temp_out)
                                 else:
                                     temp_out = round(temp_out, 8)
@@ -374,152 +375,191 @@ def main_thread(lines):
 
                     case "falls":
                         condition = eval_expression(better_join(tokens[1:], ' '), variables)
-                        block_initiators[line.indent] = BlockInitiator(initiator="falls", condition=condition, entered_case=False)
+                        block_initiators[line.indent] = \
+                            BlockInitiator(initiator="falls",condition=condition,entered_case=False)
                         max_indent += indent_step
 
                     case "dann":
                         if ((not line.indent - indent_step in block_initiators) or \
                             block_initiators[line.indent - indent_step].initiator != "falls"):
-                            raise Exception("expected 'falls' before 'dann'.")
+                            raise SyntaxError("expected 'falls' before 'dann'.")
 
                         if len(tokens) > 1:
-                            lines.insert(line_index+1, Line(better_join(tokens[1:], ' '), line.index, line.indent + indent_step))
+                            lines.insert(\
+                                line_index+1,\
+                                Line(\
+                                    better_join(tokens[1:],' '),line.index,line.indent+indent_step\
+                                )\
+                            )
                             lines[line_index].text = (' ' * line.indent) + tokens[0]
 
-                        if (block_initiators[line.indent - indent_step].condition):
+                        if block_initiators[line.indent - indent_step].condition:
                             max_indent += indent_step
                         else:
                             #find next 'sonst' at the correct indent, otherwise move to end
                             i = line_index
-                            while ((i < len(lines)) and (len(lines[i].text) - len(lines[i].text.lstrip(' ')) >= line.indent)):
-                                if (lines[i].text.lstrip(" ").startswith("sonst")):
+                            while (\
+                                i < len(lines) and\
+                                len(lines[i].text) - len(lines[i].text.lstrip(' ') >= line.indent)\
+                                ):
+
+                                if lines[i].text.lstrip(" ").startswith("sonst"):
                                     break
 
                                 i += 1
                             line_index = i-1
 
                     case "sonst":
-                        if ((not (line.indent - indent_step) in block_initiators) or block_initiators[line.indent - indent_step].initiator != "falls"):
-                            raise Exception("expected 'falls' before 'sonst'.")
+                        if (not line.indent - indent_step in block_initiators) or\
+                            block_initiators[line.indent - indent_step].initiator != "falls":
 
-                        if (len(tokens) > 1):
-                            lines.insert(line_index+1, Line(better_join(tokens[1:], ' '), line.index, line.indent + indent_step))
+                            raise SyntaxError("expected 'falls' before 'sonst'.")
+
+                        if len(tokens) > 1:
+                            lines.insert(\
+                                line_index+1,\
+                                Line(better_join(tokens[1:], ' '),\
+                                line.index,\
+                                line.indent + indent_step)\
+                                )
                             line.text = (' ' * line.indent) + tokens[0]
 
-                        if (not block_initiators[line.indent - indent_step].condition):
+                        if not block_initiators[line.indent - indent_step].condition:
                             max_indent += indent_step
 
-                    case other if (colon_index != -1):    #case
-                        if ((not (line.indent - indent_step) in block_initiators) or block_initiators[line.indent - indent_step].initiator != "falls"):
-                            raise Exception("expected 'falls' before case.")
+                    case other if colon_index != -1:    #case
+                        if (not line.indent - indent_step in block_initiators) or\
+                            block_initiators[line.indent - indent_step].initiator != "falls":
+                            raise SyntaxError("expected 'falls' before case.")
 
                         initiator = block_initiators[line.indent - indent_step]
 
-                        if (len(tokens) > 1):
-                            lines.insert(line_index+1, Line(better_join(tokens[colon_index+1:], ' '), line.index, line.indent + indent_step))
-                            line.text = (' ' * line.indent) + better_join(tokens[:colon_index+1], ' ')
+                        if len(tokens) > 1:
+                            lines.insert(line_index+1,\
+                                Line(better_join(tokens[colon_index+1:], ' '),\
+                                line.index,\
+                                line.indent + indent_step))
+                            line.text = (' '*line.indent) + better_join(tokens[:colon_index+1], ' ')
                             tokens = get_all_tokens(line.text)
 
                         expression = [tokens[i] for i in range(len(tokens)-1)]
                         expression.append(tokens[-1][:-1])
 
                         sonst = False
-                        if (tokens[0] == "sonst:"):
-                            if (initiator.entered_case):
+                        if tokens[0] == "sonst:":
+                            if initiator.entered_case:
                                 line_index += 1
                                 continue
-                            
+
                             sonst = True
 
-                        if (sonst or initiator.condition == eval_expression(better_join(expression, ' '), variables)):
+                        if sonst or initiator.condition == \
+                            eval_expression(better_join(expression, ' '), variables):
+
                             max_indent += indent_step
                             initiator.entered_case = True
 
                     case "solange":
-                        if (tokens[-1] == "wiederhole"):
+                        if tokens[-1] == "wiederhole":
                             expression = better_join(tokens[1:-1], ' ')
                         else:
                             expression = better_join(tokens[1:], ' ')
                         condition = eval_expression(expression, variables)
 
-                        if (tokens[-1] != "wiederhole"):
-                            if (block_initiators[line.indent].initiator != "wiederhole"):
-                                raise Exception("expected 'wiederhole' at the end of the line.")
-                            elif (condition):
+                        if tokens[-1] != "wiederhole":
+                            if block_initiators[line.indent].initiator != "wiederhole":
+                                raise SyntaxError("expected 'wiederhole' at the end of the line.")
+                            if condition:
                                 line_index = block_initiators[line.indent].index
                                 max_indent -= indent_step
                                 continue
 
-                        if (condition):
-                            block_initiators[line.indent] = BlockInitiator(initiator="solange", condition=condition, index=line_index)
+                        if condition:
+                            block_initiators[line.indent] = BlockInitiator(\
+                                initiator="solange",\
+                                condition=condition,\
+                                index=line_index)
+
                             max_indent += indent_step
-                        elif (line.indent in block_initiators):
+                        elif line.indent in block_initiators:
                             block_initiators.pop(line.indent)
 
                     case "wiederhole":
                         max_indent += indent_step
-                        block_initiators[line.indent] = BlockInitiator(initiator="wiederhole", index=line_index)
+                        block_initiators[line.indent] = \
+                            BlockInitiator(initiator="wiederhole", index=line_index)
 
                     case "für":
                         #only do this the first time
-                        if (not line.indent in block_initiators):
-                            if (tokens[-1] != "wiederhole"):
-                                raise Exception("expected 'wiederhole' at the end of the line.")
-                            
-                            if (len(tokens) < 3):
-                                raise Exception("expected variable after 'für'.")
+                        if not line.indent in block_initiators:
+                            if tokens[-1] != "wiederhole":
+                                raise SyntaxError("expected 'wiederhole' at the end of the line.")
+
+                            if len(tokens) < 3:
+                                raise SyntaxError("expected variable after 'für'.")
                             var = tokens[1]
                             if (len(tokens) < 4 or tokens[2] != 'von'):
-                                raise Exception("expected 'von' after variable.")
+                                raise SyntaxError("expected 'von' after variable.")
 
-                            if (not "bis" in tokens):
-                                raise Exception("expected 'bis' after value.")
-                            
+                            if "bis" not in tokens:
+                                raise SyntaxError("expected 'bis' after value.")
+
                             bis_index = tokens.index('bis')
                             start = tokens[3:bis_index]
-                            if (len(start) < 1):
-                                raise Exception("expected a start value.")
+                            if len(start) < 1:
+                                raise SyntaxError("expected a start value.")
                             variables[var] = eval_expression(better_join(start, ' '), variables)
 
-                            if ("mit" in tokens):
+                            if "mit" in tokens:
                                 mit_index = tokens.index("mit")
                             else:
                                 mit_index = -1
 
                             stop = tokens[bis_index+1:mit_index]
-                            if (len(stop) < 1):
-                                raise Exception("expected a stop value.")
+                            if len(stop) < 1:
+                                raise SyntaxError("expected a stop value.")
 
-                            if (mit_index != -1):
+                            if mit_index != -1:
                                 step = tokens[mit_index+1:-1]
                             else:
                                 step = ["1"]
 
-                            block_initiators[line.indent] = BlockInitiator(initiator="für", var=var, stop=stop, step=step, index=line_index)
+                            block_initiators[line.indent] = BlockInitiator(\
+                                initiator="für",var=var, stop=stop, step=step, index=line_index)
                         #on repeats
                         else:
-                            variables[block_initiators[line.indent].var] += eval_expression(better_join(block_initiators[line.indent].step, ' '), variables)
+                            variables[block_initiators[line.indent].var] += \
+                                eval_expression(\
+                                    better_join(block_initiators[line.indent].step, ' '), variables\
+                                )
 
-                        if (variables[block_initiators[line.indent].var] <= eval_expression(better_join(block_initiators[line.indent].stop, ' '), variables)):
+                        if variables[block_initiators[line.indent].var] <= \
+                            eval_expression(\
+                                better_join(block_initiators[line.indent].stop, ' '), variables\
+                            ):
+
                             max_indent = line.indent + indent_step
                         else:
                             block_initiators.pop(line.indent)
 
-                    case other if (tokens[1].strip() == '='):
+                    case other if tokens[1].strip() == '=':
                         is_valid_var_name(tokens[0])
-                        variables[tokens[0]] = eval_expression(better_join(tokens[2:], ' '), variables)
+                        variables[tokens[0]]=eval_expression(better_join(tokens[2:],' '),variables)
 
                 line_index += 1
 
-            if (sum([l.initiator for l in block_initiators.values()].count(s) for s in ("solange", "für")) > 0):
-                begin_indent = max(indent_of_last_key(block_initiators, "solange"), indent_of_last_key(block_initiators, "für"))
+            if sum([l.initiator for l in block_initiators.values()].count(s) \
+                for s in ("solange", "für")) > 0:
+
+                begin_indent = max(indent_of_last_key(block_initiators, "solange"),\
+                    indent_of_last_key(block_initiators, "für"))
                 line_index = block_initiators[begin_indent].index
                 continue
             #else
             break
 
-    except Exception as e:
-        temp_out = f"Line {line.index}: {e}"
+    except SyntaxError as error:
+        temp_out = f"Line {line.index}: {error}"
         print(temp_out)
         output += temp_out
         return output
@@ -527,24 +567,24 @@ def main_thread(lines):
     return output
 
 def main():
-    inFile = open("in.txt", 'r')
-    outFile = open("out.txt", 'w')
+    """main()"""
+    with open("in.txt", 'r', encoding="UTF-8") as in_file,\
+         open("out.txt", 'w', encoding="UTF-8") as out_file:
+        all_lines = []
+        i = 1
+        for line in in_file:
+            line = line.rstrip('\n').rstrip(' ')
+            indent = len(line) - len(line.lstrip(' '))
+            line = line[indent:]
+            if line.endswith(''):
+                line = line[:-1]
+            if line != "":
+                all_lines.append(Line(line, i, indent))
+            i += 1
+        output_text = main_thread(all_lines)
 
-    allLines = []
-    i = 1
-    for line in inFile:
-        line = line.rstrip('\n').rstrip(' ')
-        indent = len(line) - len(line.lstrip(' '))
-        line = line[indent:]
-        if (line.endswith('')):
-            line = line[:-1]
-        if (line != ""):
-            allLines.append(Line(line, i, indent))
-        i += 1
-    outputText = main_thread(allLines)
+        out_file.write(output_text)
+        out_file.close()
 
-    outFile.write(outputText)
-    inFile.close()
-    outFile.close()
-
-main()
+if __name__ == "__main__":
+    main()

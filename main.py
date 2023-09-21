@@ -574,7 +574,7 @@ def main():
         i = 1
         for line in in_file:
             line = line.rstrip('\n').rstrip(' ')
-            indent = len(line) - len(line.lstrip(' '))
+            indent = len(line) - len(line.lstrip(' \t'))
             line = line[indent:]
             if line.endswith(';'):
                 line = line[:-1]

@@ -400,7 +400,7 @@ def main_thread(lines):
                             i = line_index
                             while (\
                                 i < len(lines) and\
-                                len(lines[i].text) - len(lines[i].text.lstrip(' ') >= line.indent)\
+                                len(lines[i].text) - len(lines[i].text.lstrip(' ')) >= line.indent\
                                 ):
 
                                 if lines[i].text.lstrip(" ").startswith("sonst"):

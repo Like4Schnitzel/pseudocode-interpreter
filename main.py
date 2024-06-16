@@ -1,4 +1,5 @@
 """Interprets pseudocode."""
+from sys import argv
 from re import findall
 from dataclasses import dataclass
 
@@ -566,9 +567,9 @@ def main_thread(lines):
 
     return output
 
-def main():
+def main(in_filename: str = "in.txt"):
     """main()"""
-    with open("in.txt", 'r', encoding="UTF-8") as in_file,\
+    with open(in_filename, 'r', encoding="UTF-8") as in_file,\
          open("out.txt", 'w', encoding="UTF-8") as out_file:
         all_lines = []
         i = 1
@@ -587,4 +588,7 @@ def main():
         out_file.close()
 
 if __name__ == "__main__":
-    main()
+    if len(argv) > 1:
+        main(argv[1])
+    else:
+        main()

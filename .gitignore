@@ -3,3 +3,4 @@
 *.exe
 out.py
 .vscode
+*.stengelcode

@@ -1,5 +1,6 @@
 """Interprets pseudocode."""
 from re import findall
+from re import compile
 from dataclasses import dataclass
 
 @dataclass
@@ -34,19 +35,19 @@ def find_last_non_quoted_string(string, to_find):
         index = string.rfind(to_find, 0, index)
     return index
 
-def find_closing_pars(expr : str, open_par):
+def find_closing_pars(expr : str, open_par, par_type: str = '()'):
     """Returns end index of a bracket pair."""
     levels_deep = 1
     i = open_par+1
     while levels_deep > 0:
-        if expr[i] == '(':
+        if expr[i] == par_type[0]:
             levels_deep += 1
-        elif expr[i] == ')':
+        elif expr[i] == par_type[1]:
             levels_deep -= 1
 
         i += 1
         if (i >= len(expr) and levels_deep > 0):
-            raise SyntaxError("expected ')'")
+            raise SyntaxError("expected '" + par_type[1] + "'")
 
     return i-1
 
@@ -69,7 +70,7 @@ def float_or_bool_or_string(val : str):
             return to_bool(val)
         except SyntaxError:
             return rounded_float(val)
-    except SyntaxError:
+    except ValueError:
         return val
 
 def var_or_not(val : str, variables : dict):
@@ -84,6 +85,11 @@ def var_or_not(val : str, variables : dict):
             return rounded_float(val)
     except Exception as exc:
         is_valid_var_name(val)
+
+        if variable_is_array(val, validify_var_name=False):
+            return read_from_array(variables, val)
+
+        #else
         if val in variables.keys():
             return variables[val]
 
@@ -105,12 +111,22 @@ def eval_expression(expr, variables : dict):
 
     open_par = expr.find('(')
     while open_par != -1:
-        closing_par = find_closing_pars(expr, open_par)
+        closing_par = find_closing_pars(expr, open_par, '()')
         expr = expr[:open_par] \
                + str(eval_expression(expr[open_par+1:closing_par], variables)) \
                + expr[closing_par+1:]
 
         open_par = expr.find('(')
+    
+    # handle array accesses
+    open_square = expr.find('[')
+    while open_square != -1:
+        closing_quare = find_closing_pars(expr, open_square, '[]')
+        expr = expr[:open_square+1] \
+               + str(eval_expression(expr[open_square+1:closing_quare], variables)) \
+               + expr[closing_quare:]
+
+        open_square = expr.find('[', closing_quare)
 
     connector_groups = [[' oder ', ' und '], ['==', '!=', '<', '>', '<=', '>='],
                        ['+', '-'], [' div ', ' mod ', '%', '/', '*'], ['^']]
@@ -222,7 +238,7 @@ def get_all_tokens(line : str):
                 split_line.append(to_append)
             last_append_index = i+1
     for token in split_line:
-        #turn "foo<=bar>=baz" into ["foo", "<", "=", "bar", ">", "=", "baz"]
+        #turn "foo<=bar>=baz[g]" into ["foo", "<", "=", "bar", ">", "=", "baz", "[", "g", "]"]
         i = 0
         in_quotations = False
         while i < len(token):
@@ -230,7 +246,7 @@ def get_all_tokens(line : str):
                 in_quotations = not in_quotations
 
             if not in_quotations:
-                if (token[i] in ['<', '>', '=', '!']):
+                if (token[i] in ['<', '>', '=', '!', '[', ']']):
                     if token[:i] != '':
                         tokens.append(token[:i])
                     tokens.append(token[i])
@@ -244,9 +260,12 @@ def get_all_tokens(line : str):
 
 def is_valid_var_name(string):
     """Checks if a variable name breaks conventions."""
+    if variable_is_array(string):
+        return
+
     for (i, char) in enumerate(string.lower()):
-        if (((char < 'a' or char > 'z') and (char < '0' or char > '9'))\
-            or (i == 0 and char >= '0' and char <= '9')):
+        if ((char < 'a' or char > 'z') and (char < '0' or char > '9') and char != '_')\
+            or (i == 0 and char >= '0' and char <= '9'):
             raise SyntaxError(f"'{string}' is not a valid variable name.")
 
 def get_indent_step(lines):
@@ -275,6 +294,63 @@ def indent_of_last_key(block_initiators : dict, key_str : str):
             last_indent = key
 
     return last_indent
+
+def variable_is_array(token: str, validify_var_name: bool = True):
+    """Checks if a variable is an array"""
+    brackets_open = token.find("[")
+    brackets_close = token.rfind("]")
+
+    if brackets_open == -1:
+        return False
+
+    if brackets_close != len(token)-1:
+        raise SyntaxError("Expected closing brackets ']'")
+
+    if validify_var_name:
+        if token[brackets_open-1] == " ": is_valid_var_name(token[:brackets_open-1])
+        else: is_valid_var_name(token[:brackets_open])
+
+    return True
+
+def dynamic_array_address_translation(var_name: str, variables: dict):
+    """
+    Takes an array address of the form \"foo[123]\" and separates it into its parts.
+    If the index is an expression it evaluates it.
+
+    Returns a dictionary of the form:
+    {
+        "stripped_var_name": "foo"
+        "index": 123
+    }
+    """
+    opening_brackets = var_name.find('[')
+    closing_brackets = var_name.rfind(']')
+    var_name_without_brackets = var_name[:opening_brackets].strip()
+    inside_brackets = var_name[opening_brackets+1:closing_brackets]
+    index = int(eval_expression(inside_brackets, variables))
+
+    return {
+        "stripped_var_name": var_name_without_brackets,
+        "index": index
+    }
+
+def assign_to_array(variables: dict, var_name: str, value: any):
+    """Assigns a value to an array."""
+    address_parts = dynamic_array_address_translation(var_name, variables)
+
+    if address_parts["stripped_var_name"] not in variables:
+        variables[address_parts["stripped_var_name"]] = {}
+    
+    variables[address_parts["stripped_var_name"]][address_parts["index"]] = eval_expression(value, variables)
+
+def read_from_array(variables: dict, var_name: str):
+    """Gets a value from an array."""
+    address_parts = dynamic_array_address_translation(var_name, variables)
+
+    if address_parts["stripped_var_name"] not in variables or address_parts["index"] not in variables[address_parts["stripped_var_name"]]:
+        raise SyntaxError("Value not assigned.")
+    
+    return variables[address_parts["stripped_var_name"]][address_parts["index"]]
 
 def main_thread(lines):
     """Function to handle interpretation of input file."""
@@ -330,10 +406,15 @@ def main_thread(lines):
 
                         while index < len(tokens):
                             is_valid_var_name(tokens[index])
-                            variables[tokens[index]] = float_or_bool_or_string((input(
+                            value = float_or_bool_or_string((input(
                                 "Enter a value for " + tokens[index] + ": ")))
+                            
+                            if variable_is_array(tokens[index], validify_var_name=False):
+                                assign_to_array(variables, tokens[index], value)
+                            else:
+                                variables[tokens[index]] = value
 
-                            temp_out = variables[tokens[index]]
+                            temp_out = value
                             if isinstance(temp_out, float):
                                 if int(temp_out) == temp_out:
                                     temp_out = int(temp_out)
@@ -491,7 +572,7 @@ def main_thread(lines):
 
                     case "für":
                         #only do this the first time
-                        if not line.indent in block_initiators:
+                        if line.indent not in block_initiators or block_initiators[line.indent].initiator == "falls":
                             if tokens[-1] != "wiederhole":
                                 raise SyntaxError("expected 'wiederhole' at the end of the line.")
 
@@ -542,9 +623,21 @@ def main_thread(lines):
                         else:
                             block_initiators.pop(line.indent)
 
-                    case other if tokens[1].strip() == '=':
+                    case other if len(tokens) > 1 and tokens[1].strip() == '=': # regular assignment
                         is_valid_var_name(tokens[0])
                         variables[tokens[0]]=eval_expression(better_join(tokens[2:],' '),variables)
+
+                    case other if len(tokens) > 4 and tokens[1].strip() == '[' and '=' in tokens[2:]:   # array assingment
+                        equals_index = tokens.index('=')
+                        closing_squares_index = equals_index-1
+
+                        if tokens[closing_squares_index] != ']':
+                            raise SyntaxError("Expected ']', not '" + tokens[closing_squares_index] + "'.")
+
+                        assign_to_array(variables, better_join(tokens[:equals_index],' '), better_join(tokens[equals_index+1:],' '))
+
+                    case other:
+                        raise SyntaxError("Couldn't parse line.")
 
                 line_index += 1
 
